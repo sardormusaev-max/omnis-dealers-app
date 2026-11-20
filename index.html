@@ -97,7 +97,7 @@ textarea.inp{height:auto;padding:12px 14px;resize:none}
 <script>
 const API = "https://nrszupwnnzlnfxeqrbnb.supabase.co/functions/v1/miniapp-api";
 const tg = window.Telegram && Telegram.WebApp;
-const S = { role:null, data:null, view:"home", period:"all", sel:null, catalog:null, cat:"Все", q:"", cart:{}, adminDealers:null, dealerId:null, pay:{method:"Click"} };
+const S = { role:null, data:null, view:"home", period:"all", sel:null, catalog:null, cat:"Все", q:"", cart:{}, brand:"Все", adminDealers:null, dealerId:null, pay:{method:"Click"} };
 try { S.cart = JSON.parse(localStorage.getItem("omnis_cart") || "{}") } catch (e) {}
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -367,28 +367,32 @@ function shrink(file) {
 async function renderOrder() {
   if (!S.catalog) { $("#app").innerHTML = `<div class="center"><div class="spin"></div></div>`; try { S.catalog = (await api("catalog")).products } catch (e) { $("#app").innerHTML = errBox("Не удалось загрузить каталог."); return } }
   const cats = ["Все", ...new Set(S.catalog.map((p) => p.category))];
+  const brands = ["Все", ...new Set(S.catalog.map((p) => p.brand))];
   const html = `
   <header class="page-h"><h1 class="h">Новый заказ</h1><p>Дилерский прайс · ${S.catalog.length} позиций</p></header>
   <div style="padding:8px 16px 0"><label for="q" class="sr">Поиск товара</label><div class="search">${ic("search", "#5B6475")}<input id="q" placeholder="Название, вкус или бренд" value="${esc(S.q)}" autocomplete="off"></div></div>
-  <div style="padding:10px 16px 12px"><button class="catbtn" id="catbtn" aria-haspopup="dialog"><span><span class="muted" style="font-weight:500">Категория:</span> ${esc(S.cat)}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111F32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>
+  <div class="grid2" style="padding:10px 16px 12px;gap:8px">
+    <button class="catbtn" id="catbtn" aria-haspopup="dialog"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="muted" style="font-weight:500">Категория:</span> ${esc(S.cat)}</span>${DOWN}</button>
+    <button class="catbtn" id="brbtn" aria-haspopup="dialog"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="muted" style="font-weight:500">Бренд:</span> ${esc(S.brand)}</span>${DOWN}</button></div>
   <main class="wrap" id="plist" style="gap:8px;padding-bottom:150px"></main><div id="cartbar"></div>`;
   $("#app").innerHTML = html;
-  $("#q").oninput = (e) => { S.q = e.target.value; if (S.q && S.cat !== "Все") { S.cat = "Все"; $("#catbtn").querySelector("span").innerHTML = '<span class="muted" style="font-weight:500">Категория:</span> Все' } drawList() };
-  $("#catbtn").onclick = () => openCats(cats);
+  $("#q").oninput = (e) => { S.q = e.target.value; if (S.q && (S.cat !== "Все" || S.brand !== "Все")) { S.cat = "Все"; S.brand = "Все"; $("#catbtn").querySelector("span").innerHTML = '<span class="muted" style="font-weight:500">Категория:</span> Все'; $("#brbtn").querySelector("span").innerHTML = '<span class="muted" style="font-weight:500">Бренд:</span> Все' } drawList() };
+  $("#catbtn").onclick = () => openSheet("Категории", cats, S.cat, (c) => S.catalog.filter((p) => (c === "Все" || p.category === c) && (S.brand === "Все" || p.brand === S.brand)).length, (c) => { S.cat = c; renderOrder() });
+  $("#brbtn").onclick = () => openSheet("Бренды", brands, S.brand, (b) => S.catalog.filter((p) => (b === "Все" || p.brand === b) && (S.cat === "Все" || p.category === S.cat)).length, (b) => { S.brand = b; renderOrder() });
   drawList();
 }
-function openCats(cats) {
-  const cnt = (c) => c === "Все" ? S.catalog.length : S.catalog.filter((p) => p.category === c).length;
+const DOWN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111F32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><path d="M6 9l6 6 6-6"/></svg>';
+function openSheet(title, opts, cur, count, pick) {
   const bg = document.createElement("div"); bg.className = "sheet-bg";
-  bg.innerHTML = `<div class="sheet" role="dialog" aria-label="Категории"><h2 class="h" style="font-size:26px;margin:0 4px 8px">Категории</h2>
-    ${cats.map((c) => `<button class="opt ${S.cat === c ? "on" : ""}" data-c="${esc(c)}"><span>${esc(c)}</span><span class="muted sm">${cnt(c)}</span></button>`).join("")}</div>`;
+  bg.innerHTML = `<div class="sheet" role="dialog" aria-label="${esc(title)}"><h2 class="h" style="font-size:26px;margin:0 4px 8px">${esc(title)}</h2>
+    ${opts.map((o) => { const n = count(o); return `<button class="opt ${cur === o ? "on" : ""}" data-o="${esc(o)}" ${n ? "" : 'style="opacity:.4"'}><span>${esc(o)}</span><span class="muted sm">${n}</span></button>` }).join("")}</div>`;
   bg.onclick = (e) => { if (e.target === bg) bg.remove() };
   document.body.appendChild(bg);
-  bg.querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { S.cat = b.dataset.c; bg.remove(); haptic(); renderOrder() });
+  bg.querySelectorAll("[data-o]").forEach((b) => b.onclick = () => { bg.remove(); haptic(); pick(b.dataset.o) });
 }
 function drawList() {
   const toks = S.q.toLowerCase().replace(/ё/g, "е").split(/\s+/).filter(Boolean);
-  const list = S.catalog.filter((p) => (S.cat === "Все" || p.category === S.cat) &&
+  const list = S.catalog.filter((p) => (S.cat === "Все" || p.category === S.cat) && (S.brand === "Все" || p.brand === S.brand) &&
     toks.every((t) => `${p.name} ${p.size} ${p.brand} ${p.id}`.toLowerCase().replace(/ё/g, "е").includes(t)));
   $("#plist").innerHTML = list.length ? list.slice(0, 120).map((p) => { const q = S.cart[p.id] || 0; return `
     <div class="prod"><img class="thumb" src="img/${p.id}.jpg" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
