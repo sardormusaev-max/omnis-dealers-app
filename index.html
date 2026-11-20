@@ -352,6 +352,8 @@ function renderPay() {
   $("#bk").onclick = () => go("home");
   $("#send").onclick = async () => {
     if (!(P.amount > 0)) { amt.focus(); try { tg.showAlert("Укажите сумму оплаты") } catch (e) {} return }
+    const acc = S.data.dealer.account_label && (S.data.accounts || []).length > 1 ? ` по счёту «${S.data.dealer.account_label}»` : "";
+    if (!(await confirmBox(`Отправить на проверку оплату ${money(P.amount)} сум (${P.method})${acc}${P.photo ? " со скриншотом" : " без скриншота"}?`))) return;
     const b = $("#send"); b.disabled = true; b.textContent = "Отправляем…";
     try {
       await api("pay", { amount: P.amount, method: P.method, paidAt: P.date || today(), comment: P.comment || null, photo: P.photo || null });
@@ -361,6 +363,9 @@ function renderPay() {
       await reload(); go("done");
     } catch (e) { b.disabled = false; b.textContent = "Отправить на проверку"; try { tg.showAlert("Не удалось отправить. Попробуйте ещё раз.") } catch (x) {} }
   };
+}
+function confirmBox(text) {
+  return new Promise((res) => { try { tg.showConfirm(text, (ok) => res(!!ok)) } catch (e) { res(window.confirm(text)) } });
 }
 function shrink(file) {
   return new Promise((res, rej) => {
@@ -424,8 +429,10 @@ function drawCart() {
     <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="sm muted">${ids.length} поз. · ${units} шт · <button id="clr" style="border:none;background:none;color:var(--navy);font-weight:600;padding:0">очистить</button></span><span class="num" style="font-size:28px">${money(sum)} сум</span></div>
     <span class="sm" style="color:${after > lim ? "var(--bad)" : "#3B4352"}">После отгрузки долг составит ${money(after)} сум · ${String(Math.round(after / lim * 1000) / 10).replace(".", ",")}% лимита</span>
     <button class="btn btn-navy" id="sendOrder">Отправить заявку</button></section>`;
-  $("#clr").onclick = () => { S.cart = {}; saveCart(); drawList() };
+  $("#clr").onclick = async () => { if (!(await confirmBox("Очистить корзину?"))) return; S.cart = {}; saveCart(); drawList() };
   $("#sendOrder").onclick = async () => {
+    const acc = S.data.dealer.account_label && (S.data.accounts || []).length > 1 ? ` по счёту «${S.data.dealer.account_label}»` : "";
+    if (!(await confirmBox(`Отправить заявку${acc}: ${ids.length} поз., ${units} шт на ${money(sum)} сум?`))) return;
     const b = $("#sendOrder"); b.disabled = true; b.textContent = "Отправляем…";
     try {
       const r = await api("order", { items: ids.map((id) => ({ product_id: Number(id), qty: S.cart[id] })) });
