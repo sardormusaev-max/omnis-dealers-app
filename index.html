@@ -136,8 +136,7 @@ function oldDebtSince(d) {
   const paid = Number(d.summary.paid || 0);
   const term = Number(d.dealer.payment_term_days || 30);
   let cum = 0;
-  const asc = [...d.shipments].sort((a, b) => a.act_date.localeCompare(b.act_date) || a.act_no - b.act_no);
-  for (const s of asc) { cum += Number(s.total); if (cum > paid && daysAgo(s.act_date) > term) return s.act_date; }
+  for (const r of d.statement) { if (r.kind === "payment") continue; cum += Number(r.amount); if (cum > paid && daysAgo(r.op_date) > term) return r.op_date; }
   return null;
 }
 
@@ -222,7 +221,7 @@ function renderHome() {
       ${rows.length || pendRows.length ? `<div class="hdr"><span>ОПЕРАЦИЯ</span><span style="text-align:right">СУММА</span><span style="text-align:right;min-width:80px">ДОЛГ</span></div>` : `<p class="muted sm" style="margin:0">Операций за период нет.</p>`}
       <div>
       ${pendRows.map((p) => `<div class="row"><div><div class="a">Оплата · на проверке</div><div class="b">${dm(p.paid_at)} · ${agoTxt(p.paid_at)}</div></div><span class="num s pend">−${money(p.amount)}</span><span class="num bal">—</span></div>`).join("")}
-      ${rows.map((r) => `<div class="row"><div><div class="a">${r.kind === "shipment" ? "Отгрузка · " + esc(r.ref) : "Оплата · " + esc(r.ref)}</div><div class="b">${dm(r.op_date)} · ${agoTxt(r.op_date)}</div></div><span class="num s ${r.kind === "shipment" ? "plus" : "minus"}">${r.kind === "shipment" ? "+" : "−"}${money(Math.abs(r.amount))}</span><span class="num bal">${money(r.balance)}</span></div>`).join("")}
+      ${rows.map((r) => `<div class="row"><div><div class="a">${r.kind === "opening" ? "Начальный долг (перенос)" : r.kind === "shipment" ? "Отгрузка · " + esc(r.ref) : "Оплата · " + esc(r.ref)}</div><div class="b">${dm(r.op_date)} · ${agoTxt(r.op_date)}</div></div><span class="num s ${r.kind === "payment" ? "minus" : "plus"}">${r.kind === "payment" ? "−" : "+"}${money(Math.abs(r.amount))}</span><span class="num bal">${money(r.balance)}</span></div>`).join("")}
       </div>
     </section>
   </main>`;
