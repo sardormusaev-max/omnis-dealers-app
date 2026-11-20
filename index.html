@@ -195,7 +195,7 @@ function renderHome() {
     ${(d.accounts || []).length > 1 ? `<div role="tablist" aria-label="Счёт" style="display:flex;gap:6px;margin-top:14px">${d.accounts.map((a) => `<button role="tab" aria-selected="${a.id === d.dealer.id}" data-acc="${a.id}" style="height:36px;padding:0 14px;border-radius:12px;font-weight:600;font-size:13px;border:1px solid ${a.id === d.dealer.id ? "#fff" : "#3A4A63"};background:${a.id === d.dealer.id ? "#fff" : "transparent"};color:${a.id === d.dealer.id ? "#111F32" : "#fff"}">${esc(a.account_label || "Основной")}</button>`).join("")}</div>` : ""}</header>
   <main class="wrap lift">
     <section class="debt" aria-label="Текущий долг">
-      <div><div class="lbl">${bal < 0 ? "Переплата" : "Текущий долг"}</div>
+      <div><div class="lbl">${bal < 0 ? "Переплата" : "Текущий долг"}${d.dealer.account_label && (d.accounts || []).length > 1 ? ` · счёт «${esc(d.dealer.account_label)}»` : ""}</div>
         <div style="display:flex;align-items:baseline;gap:8px"><span class="num big">${money(Math.abs(bal))}</span><span class="lbl" style="font-size:15px">сум</span></div></div>
       <div class="grid2">
         <div class="tile t-navy"><span class="t">Дней без оплаты</span><span class="num v">${s.days_without_payment ?? "—"}</span><span class="s">${s.last_payment ? "последняя " + dmy(s.last_payment) : "оплат ещё не было"}</span></div>
@@ -446,22 +446,35 @@ function renderDone() {
   $("#dl").onclick = () => go(m.link || "home");
 }
 
+const accStyle = (l) => l === "Наличка" ? "background:#E3F3EA;color:#1F6B44" : l === "Перечисление" ? "background:#E4ECF7;color:#193E75" : "background:var(--light);color:var(--dark)";
 function renderAdmin() {
   $("#nav").hidden = true;
   const ds = S.adminDealers || [];
   const tot = ds.reduce((a, d) => a + Number(d.summary.balance || 0), 0), old = ds.reduce((a, d) => a + Number(d.summary.old_debt || 0), 0);
-  ds.sort((a, b) => Number(b.summary.balance || 0) - Number(a.summary.balance || 0));
+  const gm = new Map(); ds.forEach((d) => { const k = d.group_id || d.id; if (!gm.has(k)) gm.set(k, []); gm.get(k).push(d) });
+  const groups = [...gm.values()].sort((a, b) => b.reduce((x, d) => x + Number(d.summary.balance || 0), 0) - a.reduce((x, d) => x + Number(d.summary.balance || 0), 0));
+  const dealerBtn = (d) => `<button class="act" data-d="${d.id}">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">${esc(d.name)}${d.is_test ? ' <span class="sm muted">(тест)</span>' : ""}</span>
+      <span class="sm muted">${esc(d.city || "")}${d.summary.days_without_payment != null ? " · без оплаты " + d.summary.days_without_payment + " дн." : ""}</span>
+      ${Number(d.summary.old_debt) > 0 ? `<span class="sm" style="color:var(--bad);font-weight:600">старый долг ${money(d.summary.old_debt)}</span>` : ""}</div>
+      <span class="num" style="font-size:24px;white-space:nowrap">${money(d.summary.balance)}</span>${ic("chev", "#8992A3", 16)}</button>`;
   $("#app").innerHTML = `
   <header class="top" style="padding-bottom:76px"><small>OMNIS · АДМИНИСТРАТОР</small><div class="h">Долги дилеров</div></header>
   <main class="wrap lift">
     <section class="debt"><div class="grid2">
       <div><div class="lbl">Общий долг</div><div class="num" style="font-size:34px">${money(tot)}</div></div>
       <div><div class="lbl">Старый &gt;30 дн.</div><div class="num" style="font-size:34px">${money(old)}</div></div></div></section>
-    ${ds.map((d) => `<button class="act" data-d="${d.id}">
-      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">${esc(d.name)}${d.account_label ? " · " + esc(d.account_label) : ""}${d.is_test ? ' <span class="sm muted">(тест)</span>' : ""}</span>
-      <span class="sm muted">${esc(d.city || "")}${d.summary.days_without_payment != null ? " · без оплаты " + d.summary.days_without_payment + " дн." : ""}</span>
-      ${Number(d.summary.old_debt) > 0 ? `<span class="sm" style="color:var(--bad);font-weight:600">старый долг ${money(d.summary.old_debt)}</span>` : ""}</div>
-      <span class="num" style="font-size:24px;white-space:nowrap">${money(d.summary.balance)}</span>${ic("chev", "#8992A3", 16)}</button>`).join("")}
+    ${groups.map((g) => g.length === 1 ? dealerBtn(g[0]) : `
+      <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">${esc(g[0].name)}</span><span class="sm muted">${esc(g[0].city || "")} · ${g.length} счёта</span></div>
+          <div style="text-align:right"><div class="sm muted">всего</div><span class="num" style="font-size:24px">${money(g.reduce((a, d) => a + Number(d.summary.balance || 0), 0))}</span></div>
+        </div>
+        ${g.map((d) => `<button data-d="${d.id}" style="display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:#F6F7F9;border-radius:14px;padding:10px 12px;width:100%;text-align:left">
+          <span style="padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;${accStyle(d.account_label)}">${esc(d.account_label || "Основной")}</span>
+          <span class="sm muted" style="flex:1">${d.summary.days_without_payment != null ? "без оплаты " + d.summary.days_without_payment + " дн." : ""}${Number(d.summary.old_debt) > 0 ? ` · <b style="color:var(--bad)">старый ${money(d.summary.old_debt)}</b>` : ""}</span>
+          <span class="num" style="font-size:20px;white-space:nowrap">${money(d.summary.balance)}</span>${ic("chev", "#8992A3", 16)}</button>`).join("")}
+      </div>`).join("")}
     <p class="sm muted" style="text-align:center">Нажмите на дилера, чтобы увидеть его кабинет. Отгрузки и подтверждение оплат — в чате бота.</p>
   </main>`;
   document.querySelectorAll("[data-d]").forEach((b) => b.onclick = async () => {
