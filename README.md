@@ -1,1 +1,3 @@
-# omnis-dealers-app
+# OMNIS — кабинет дилера (Telegram Mini App)
+
+Статическая страница Mini App для бота @omnis_dealers_bot. Данные загружаются через защищённый API (проверка подписи Telegram); в репозитории нет ключей и данных.
