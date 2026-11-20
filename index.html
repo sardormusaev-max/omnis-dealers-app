@@ -92,6 +92,7 @@ textarea.inp{height:auto;padding:12px 14px;resize:none}
 .banner{background:var(--waitbg);color:var(--wait);font-size:13px;font-weight:600;padding:10px 16px;text-align:center}
 .spin{width:28px;height:28px;border:3px solid var(--gb);border-top-color:var(--navy);border-radius:50%;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 .zoomable{cursor:zoom-in}
+body.kb nav, body.kb .cart{display:none}
 .lb{position:fixed;inset:0;z-index:20;background:rgba(10,18,30,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom));animation:lbIn .18s ease-out}
 .lb img{width:min(90vw,520px);height:min(90vw,520px);object-fit:contain;background:#fff;border-radius:22px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
 .lb .cap{color:#fff;text-align:center;margin-top:16px;max-width:440px;display:flex;flex-direction:column;gap:4px}
@@ -451,13 +452,20 @@ function drawList() {
   $("#plist").innerHTML = list.length ? list.slice(0, 120).map((p) => { const q = C[p.id] || 0; return `
     <div class="prod"><img class="thumb zoomable" src="img/${p.id}.jpg" alt="Фото: ${esc(p.name)}" loading="lazy" data-zoom="${p.id}" role="button" tabindex="0" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
       <span class="br">${esc(p.brand)} · №${p.id}</span><span class="nm">${esc(p.name)}</span><span class="pr">${esc(p.size)} · ${money(p.price)} сум</span></div>
-      ${q ? `<div class="step"><button data-dec="${p.id}" aria-label="Меньше">−</button><input data-q="${p.id}" inputmode="numeric" value="${q}" aria-label="Количество"><button data-inc="${p.id}" aria-label="Больше">+</button></div>`
+      ${q ? `<div class="step"><button data-dec="${p.id}" aria-label="Меньше">−</button><input data-q="${p.id}" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" value="${q}" aria-label="Количество"><button data-inc="${p.id}" aria-label="Больше">+</button></div>`
           : `<button class="add" data-inc="${p.id}" aria-label="Добавить ${esc(p.name)}">${ic("plus", "#111F32")}</button>`}</div>` }).join("") + (list.length > 120 ? `<p class="sm muted" style="text-align:center">Показаны первые 120 — уточните поиск</p>` : "")
     : `<div class="card muted">Ничего не найдено</div>`;
   const setQ = (id, v) => { v = Math.max(0, Math.min(9999, v | 0)); if (v) C[id] = v; else delete C[id]; if (C === S.cart) saveCart(); haptic(); drawList() };
   document.querySelectorAll("[data-inc]").forEach((b) => b.onclick = () => setQ(b.dataset.inc, (C[b.dataset.inc] || 0) + 1));
   document.querySelectorAll("[data-dec]").forEach((b) => b.onclick = () => setQ(b.dataset.dec, (C[b.dataset.dec] || 0) - 1));
-  document.querySelectorAll("[data-q]").forEach((i) => i.onchange = () => setQ(i.dataset.q, Number(i.value.replace(/\D/g, ""))));
+  document.querySelectorAll("[data-q]").forEach((i) => {
+    const id = i.dataset.q;
+    // выделяем число, чтобы новое значение сразу заменяло старое
+    i.onfocus = () => setTimeout(() => { try { i.select() } catch (e) {} }, 0);
+    i.oninput = () => { const v = i.value.replace(/\D/g, "").slice(0, 4); if (i.value !== v) i.value = v; const n = Number(v); if (n > 0) C[id] = n };
+    i.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); i.blur() } };
+    i.onblur = () => setQ(id, Number(i.value.replace(/\D/g, "")) || 0);
+  });
   drawCart();
 }
 function drawCart() {
@@ -738,6 +746,19 @@ function renderAccPick() {
 
 const errBox = (t) => `<div class="center"><h1 class="h" style="font-size:30px">Ошибка</h1><p class="muted" style="margin:0">${esc(t)}</p><button class="btn btn-dark" onclick="location.reload()">Обновить</button></div>`;
 async function reload() { S.data = await api("dealer") }
+
+// ---------- клавиатура: прячем нижние панели, закрываем касанием вне поля ----------
+const isField = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA") && el.type !== "file";
+document.addEventListener("focusin", (e) => { if (isField(e.target)) document.body.classList.add("kb") });
+document.addEventListener("focusout", () => setTimeout(() => { if (!isField(document.activeElement)) document.body.classList.remove("kb") }, 60));
+const tapOutside = (e) => {
+  const a = document.activeElement;
+  if (!isField(a)) return;
+  if (isField(e.target) || (e.target.closest && e.target.closest("label"))) return;
+  a.blur();
+};
+document.addEventListener("touchstart", tapOutside, { capture: true, passive: true });
+document.addEventListener("mousedown", tapOutside, true);
 
 // ---------- увеличение фото ----------
 let LB = null;
