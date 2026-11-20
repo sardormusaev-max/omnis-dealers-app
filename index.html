@@ -323,9 +323,14 @@ async function renderAct() {
         ${items.map((i) => `<div class="item"><div style="display:flex;gap:10px;min-width:0">${i.product_id ? `<img class="thumb sm zoomable" src="img/${i.product_id}.jpg" alt="Фото: ${esc(i.name)}" loading="lazy" data-zoom="${i.product_id}" role="button" tabindex="0" onerror="this.style.visibility='hidden'">` : ""}<div><div class="n">${esc(i.name)}</div><div class="d">${esc(i.size)} · ${i.qty} шт × ${money(i.price)}</div></div></div><span class="num s">${money(i.amount)}</span></div>`).join("")}
         <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:12px;border-top:2px solid var(--dark)"><span style="font-weight:600">Итого</span><span class="num" style="font-size:26px">${money(s.total)} сум</span></div>
       </section>
-      ${readonly() ? "" : `<button class="btn btn-dark" id="rep">Повторить заказ</button>`}
+      <div class="grid2"><button class="btn btn-light" id="pdf">${ic("box")}Акт в PDF</button>${readonly() ? "" : `<button class="btn btn-dark" id="rep">Повторить заказ</button>`}</div>
     </main>`;
     $("#bk").onclick = () => go("acts");
+    $("#pdf").onclick = async () => {
+      const b = $("#pdf"); b.disabled = true; b.textContent = "Готовим PDF…";
+      try { await api("act_pdf", { shipmentId: s.id }); alertBox("Акт в PDF отправлен вам в чат бота — закройте приложение, чтобы его открыть или переслать."); b.textContent = "Отправлено в чат" }
+      catch (e) { b.disabled = false; b.textContent = "Акт в PDF"; alertBox("Не удалось сформировать PDF, попробуйте ещё раз.") }
+    };
     if (!readonly()) $("#rep").onclick = () => { items.forEach((i) => { if (i.product_id) S.cart[i.product_id] = i.qty }); saveCart(); go("order") };
   } catch (e) { $("#app").innerHTML = errBox("Не удалось открыть акт.") }
 }
