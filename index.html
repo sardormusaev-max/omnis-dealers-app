@@ -67,13 +67,20 @@ nav svg{width:22px;height:22px}
 textarea.inp{height:auto;padding:12px 14px;resize:none}
 .drop{height:96px;border-radius:14px;border:1.5px dashed var(--steel);background:#F6F7F9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;color:#3B4352;width:100%;overflow:hidden;position:relative}
 .drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.prod{background:#fff;border-radius:16px;padding:12px 12px 12px 14px;display:flex;align-items:center;gap:12px}
+.prod{background:#fff;border-radius:16px;padding:10px 12px 10px 10px;display:flex;align-items:center;gap:12px}
 .prod .br{font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.06em}
 .prod .nm{font-size:14px;font-weight:600;line-height:1.3}.prod .pr{font-size:12px;color:var(--muted)}
 .add{width:44px;height:44px;border-radius:14px;border:1px solid var(--line);background:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .step{display:flex;align-items:center;background:var(--dark);border-radius:14px;padding:2px;flex-shrink:0}
 .step button{width:38px;height:40px;border:none;background:none;color:#fff;font-size:20px;font-weight:700}
 .step input{width:40px;border:none;background:none;color:#fff;text-align:center;font-weight:700;font-size:15px;padding:0}
+.thumb{width:60px;height:60px;border-radius:12px;background:#fff;object-fit:contain;flex-shrink:0;border:1px solid var(--light)}
+.thumb.sm{width:44px;height:44px;border-radius:10px}
+.catbtn{display:flex;align-items:center;justify-content:space-between;gap:8px;height:44px;border-radius:14px;border:1px solid var(--line);background:#fff;padding:0 14px;font-weight:600;font-size:14px;width:100%}
+.sheet-bg{position:fixed;inset:0;background:rgba(17,31,50,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:#fff;border-radius:22px 22px 0 0;width:100%;max-width:520px;max-height:80vh;overflow:auto;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet .opt{display:flex;justify-content:space-between;align-items:center;width:100%;height:48px;border:none;background:none;border-bottom:1px solid var(--light);font-size:15px;font-weight:500;padding:0 4px;text-align:left}
+.sheet .opt.on{color:var(--navy);font-weight:700}
 .cart{position:fixed;left:0;right:0;bottom:calc(66px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto;background:#fff;border-top:1px solid var(--line);border-radius:20px 20px 0 0;padding:12px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 -6px 20px rgba(17,31,50,.08);z-index:4}
 .search{display:flex;align-items:center;gap:8px;height:48px;border-radius:14px;background:#fff;border:1px solid var(--line);padding:0 14px}
 .search input{border:none;outline:none;flex:1;background:transparent}
@@ -266,7 +273,7 @@ async function renderAct() {
         <div><div class="lbl" style="font-size:11px">Долг после</div><div class="num" style="font-size:24px">${r.debtAfter != null ? money(r.debtAfter) : "—"}</div></div></div></section>
       <section class="card">
         <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:8px"><h2 class="h" style="font-size:24px">Товары</h2><span class="sm muted">${items.length} поз. · ${units} шт</span></div>
-        ${items.map((i) => `<div class="item"><div><div class="n">${esc(i.name)}</div><div class="d">${esc(i.size)} · ${i.qty} шт × ${money(i.price)}</div></div><span class="num s">${money(i.amount)}</span></div>`).join("")}
+        ${items.map((i) => `<div class="item"><div style="display:flex;gap:10px;min-width:0">${i.product_id ? `<img class="thumb sm" src="img/${i.product_id}.jpg" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : ""}<div><div class="n">${esc(i.name)}</div><div class="d">${esc(i.size)} · ${i.qty} шт × ${money(i.price)}</div></div></div><span class="num s">${money(i.amount)}</span></div>`).join("")}
         <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:12px;border-top:2px solid var(--dark)"><span style="font-weight:600">Итого</span><span class="num" style="font-size:26px">${money(s.total)} сум</span></div>
       </section>
       ${readonly() ? "" : `<button class="btn btn-dark" id="rep">Повторить заказ</button>`}
@@ -363,19 +370,28 @@ async function renderOrder() {
   const html = `
   <header class="page-h"><h1 class="h">Новый заказ</h1><p>Дилерский прайс · ${S.catalog.length} позиций</p></header>
   <div style="padding:8px 16px 0"><label for="q" class="sr">Поиск товара</label><div class="search">${ic("search", "#5B6475")}<input id="q" placeholder="Название, вкус или бренд" value="${esc(S.q)}" autocomplete="off"></div></div>
-  <div class="chips" role="group" aria-label="Категории" style="padding:12px 16px;flex-wrap:nowrap;overflow-x:auto">${cats.map((c) => `<button class="chip ${S.cat === c ? "on" : ""}" aria-pressed="${S.cat === c}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+  <div style="padding:10px 16px 12px"><button class="catbtn" id="catbtn" aria-haspopup="dialog"><span><span class="muted" style="font-weight:500">Категория:</span> ${esc(S.cat)}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111F32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>
   <main class="wrap" id="plist" style="gap:8px;padding-bottom:150px"></main><div id="cartbar"></div>`;
   $("#app").innerHTML = html;
-  $("#q").oninput = (e) => { S.q = e.target.value; drawList() };
-  document.querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { S.cat = b.dataset.c; haptic(); renderOrder() });
+  $("#q").oninput = (e) => { S.q = e.target.value; if (S.q && S.cat !== "Все") { S.cat = "Все"; $("#catbtn").querySelector("span").innerHTML = '<span class="muted" style="font-weight:500">Категория:</span> Все' } drawList() };
+  $("#catbtn").onclick = () => openCats(cats);
   drawList();
+}
+function openCats(cats) {
+  const cnt = (c) => c === "Все" ? S.catalog.length : S.catalog.filter((p) => p.category === c).length;
+  const bg = document.createElement("div"); bg.className = "sheet-bg";
+  bg.innerHTML = `<div class="sheet" role="dialog" aria-label="Категории"><h2 class="h" style="font-size:26px;margin:0 4px 8px">Категории</h2>
+    ${cats.map((c) => `<button class="opt ${S.cat === c ? "on" : ""}" data-c="${esc(c)}"><span>${esc(c)}</span><span class="muted sm">${cnt(c)}</span></button>`).join("")}</div>`;
+  bg.onclick = (e) => { if (e.target === bg) bg.remove() };
+  document.body.appendChild(bg);
+  bg.querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { S.cat = b.dataset.c; bg.remove(); haptic(); renderOrder() });
 }
 function drawList() {
   const toks = S.q.toLowerCase().replace(/ё/g, "е").split(/\s+/).filter(Boolean);
   const list = S.catalog.filter((p) => (S.cat === "Все" || p.category === S.cat) &&
     toks.every((t) => `${p.name} ${p.size} ${p.brand} ${p.id}`.toLowerCase().replace(/ё/g, "е").includes(t)));
   $("#plist").innerHTML = list.length ? list.slice(0, 120).map((p) => { const q = S.cart[p.id] || 0; return `
-    <div class="prod"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+    <div class="prod"><img class="thumb" src="img/${p.id}.jpg" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
       <span class="br">${esc(p.brand)} · №${p.id}</span><span class="nm">${esc(p.name)}</span><span class="pr">${esc(p.size)} · ${money(p.price)} сум</span></div>
       ${q ? `<div class="step"><button data-dec="${p.id}" aria-label="Меньше">−</button><input data-q="${p.id}" inputmode="numeric" value="${q}" aria-label="Количество"><button data-inc="${p.id}" aria-label="Больше">+</button></div>`
           : `<button class="add" data-inc="${p.id}" aria-label="Добавить ${esc(p.name)}">${ic("plus", "#111F32")}</button>`}</div>` }).join("") + (list.length > 120 ? `<p class="sm muted" style="text-align:center">Показаны первые 120 — уточните поиск</p>` : "")
