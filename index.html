@@ -176,7 +176,7 @@ function render() {
 function go(v, extra = {}) { Object.assign(S, extra); S.view = v; haptic(); render(); }
 function setBack() {
   if (!tg) return;
-  const sub = ["act", "pay", "done", "apay", "ship"].includes(S.view) || (S.staff && S.dealerId && S.view === "home");
+  const sub = ["act", "pay", "done", "apay", "ship", "s_acc"].includes(S.view) || (S.staff && S.dealerId && S.view === "home");
   if (sub) tg.BackButton.show(); else tg.BackButton.hide();
 }
 function onBack() {
@@ -184,9 +184,10 @@ function onBack() {
   if (S.view === "act") return go("acts");
   if (["pay", "apay"].includes(S.view)) return go("home");
   if (S.view === "ship" || S.view === "done") return S.dealerId && S.data ? go("home") : go(S.staff === "ops" ? "s_orders" : "s_dealers");
-  if (S.staff && S.dealerId) return toStaff("s_dealers");
+  if (S.view === "s_acc") return toStaff("s_dealers");
+  if (S.staff && S.dealerId) return S.data && (S.data.accounts || []).length > 1 && S.accGroup ? toStaff("s_acc") : toStaff("s_dealers");
 }
-function toStaff(v) { S.dealerId = null; S.data = null; go(v) }
+function toStaff(v) { S.dealerId = null; S.data = null; if (v !== "s_acc") S.accGroup = null; go(v) }
 const readonly = () => !!S.staff;
 
 function renderNav() {
@@ -198,7 +199,7 @@ function renderNav() {
       ? [["s_dealers", "users", "Дилеры", 0], ["s_check", "check2", "Проверка", (c.payments || 0) + (c.acts || 0)], ["s_orders", "inbox", "Заказы", c.orders || 0], ["s_shipsel", "truck", "Отгрузка", 0]]
       : [["s_orders", "inbox", "Заказы", c.orders || 0], ["s_shipsel", "truck", "Отгрузка", 0]];
     n.style.gridTemplateColumns = `repeat(${tabs.length},1fr)`;
-    const cur = S.view === "ship" ? "s_shipsel" : S.view;
+    const cur = S.view === "ship" ? "s_shipsel" : S.view === "s_acc" ? "s_dealers" : S.view;
     n.innerHTML = tabs.map(([k, i, t, b]) => `<button data-tab="${k}" class="${cur === k ? "on" : ""}">${b ? `<span class="bd">${b}</span>` : ""}${ic(i, "currentColor", 22)}${t}</button>`).join("");
     n.querySelectorAll("button").forEach((b) => b.onclick = () => toStaff(b.dataset.tab));
     return;
@@ -559,6 +560,7 @@ function renderStaff() {
     loading(); api("init").then((r) => { S.adminDealers = r.dealers; S.dealersFresh = true; if (S.view === "s_dealers") { renderAdmin(); renderNav() } }).catch(() => { $("#app").innerHTML = errBox("Не удалось загрузить.") });
     return;
   }
+  if (v === "s_acc") return renderAccPick();
   if (v === "s_check") return renderCheck();
   if (v === "s_orders") return renderOrders();
   if (v === "s_shipsel") return renderShipSel();
@@ -657,7 +659,10 @@ async function renderShipSel() {
   $("#app").innerHTML = `
   <header class="page-h"><h1 class="h">Новая отгрузка</h1><p>Выберите дилера${r.dealers.some((d) => d.account_label) ? " и счёт" : ""}</p></header>
   <main class="wrap" style="padding-top:8px">
-    ${r.dealers.map((d) => `<button class="act" data-sd="${d.id}"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">${esc(d.name)}</span><span class="sm muted">${esc(d.city || "")}</span></div>${d.account_label ? `<span class="pill" style="${accStyle(d.account_label)}">${esc(d.account_label)}</span>` : ""}${ic("chev", "#8992A3", 16)}</button>`).join("")}
+    ${(() => { const gm = new Map(); r.dealers.forEach((d) => { const k = d.group_id || d.id; if (!gm.has(k)) gm.set(k, []); gm.get(k).push(d) }); return [...gm.values()] })().map((g) => g.length === 1
+      ? `<button class="act" data-sd="${g[0].id}"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">${esc(g[0].name)}</span><span class="sm muted">${esc(g[0].city || "")}</span></div>${ic("chev", "#8992A3", 16)}</button>`
+      : `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px"><div><div style="font-size:15px;font-weight:600">${esc(g[0].name)}</div><div class="sm muted">${esc(g[0].city || "")} · на какой счёт отгрузка?</div></div>
+          <div class="grid2">${g.map((d) => `<button class="btn" data-sd="${d.id}" style="height:46px;${accStyle(d.account_label)}">${esc(d.account_label)}</button>`).join("")}</div></div>`).join("")}
   </main>`;
   document.querySelectorAll("[data-sd]").forEach((b) => b.onclick = () => { const d = r.dealers.find((x) => x.id === b.dataset.sd); startShip(d, null, {}) });
 }
@@ -672,40 +677,63 @@ function renderDone() {
 }
 
 const accStyle = (l) => l === "Наличка" ? "background:#E3F3EA;color:#1F6B44" : l === "Перечисление" ? "background:#E4ECF7;color:#193E75" : "background:var(--light);color:var(--dark)";
+const gsum = (g, k = "balance") => g.reduce((a, d) => a + Number(d.summary[k] || 0), 0);
+function groupDealers(ds) {
+  const gm = new Map(); ds.forEach((d) => { const k = d.group_id || d.id; if (!gm.has(k)) gm.set(k, []); gm.get(k).push(d) });
+  return [...gm.values()].sort((a, b) => (a[0].is_test - b[0].is_test) || (gsum(b) - gsum(a)));
+}
+async function openDealer(id) {
+  S.dealerId = id; loading();
+  try { S.data = await api("dealer"); S.view = "home"; render() } catch (e) { $("#app").innerHTML = errBox("Не удалось открыть дилера.") }
+}
 function renderAdmin() {
   refreshCounts();
   const ds = S.adminDealers || [];
-  const tot = ds.reduce((a, d) => a + Number(d.summary.balance || 0), 0), old = ds.reduce((a, d) => a + Number(d.summary.old_debt || 0), 0);
-  const gm = new Map(); ds.forEach((d) => { const k = d.group_id || d.id; if (!gm.has(k)) gm.set(k, []); gm.get(k).push(d) });
-  const groups = [...gm.values()].sort((a, b) => b.reduce((x, d) => x + Number(d.summary.balance || 0), 0) - a.reduce((x, d) => x + Number(d.summary.balance || 0), 0));
-  const dealerBtn = (d) => `<button class="act" data-d="${d.id}">
-      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">${esc(d.name)}${d.is_test ? ' <span class="sm muted">(тест)</span>' : ""}</span>
-      <span class="sm muted">${esc(d.city || "")}${d.summary.days_without_payment != null ? " · без оплаты " + d.summary.days_without_payment + " дн." : ""}</span>
-      ${Number(d.summary.old_debt) > 0 ? `<span class="sm" style="color:var(--bad);font-weight:600">старый долг ${money(d.summary.old_debt)}</span>` : ""}</div>
-      <span class="num" style="font-size:24px;white-space:nowrap">${money(d.summary.balance)}</span>${ic("chev", "#8992A3", 16)}</button>`;
+  const real = ds.filter((d) => !d.is_test);
+  const groups = groupDealers(ds);
+  const row = (g) => {
+    const d = g[0], multi = g.length > 1;
+    const days = Math.max(...g.map((x) => x.summary.days_without_payment ?? -1));
+    const old = gsum(g, "old_debt");
+    return `<button class="act" data-g="${esc(d.group_id || d.id)}">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+        <span style="font-size:15px;font-weight:600">${esc(d.name)}${d.is_test ? ' <span class="sm muted">(тест)</span>' : ""}</span>
+        <span class="sm muted">${esc(d.city || "")}${multi ? ` · ${g.length} счёта` : ""}${days >= 0 ? " · без оплаты " + days + " дн." : ""}</span>
+        ${old > 0 ? `<span class="sm" style="color:var(--bad);font-weight:600">старый долг ${money(old)}</span>` : ""}</div>
+      <span class="num" style="font-size:24px;white-space:nowrap">${money(gsum(g))}</span>${ic("chev", "#8992A3", 16)}</button>`;
+  };
   $("#app").innerHTML = `
   <header class="top" style="padding-bottom:76px"><small>OMNIS · АДМИНИСТРАТОР</small><div class="h">Долги дилеров</div></header>
   <main class="wrap lift">
     <section class="debt"><div class="grid2">
-      <div><div class="lbl">Общий долг</div><div class="num" style="font-size:34px">${money(tot)}</div></div>
-      <div><div class="lbl">Старый &gt;30 дн.</div><div class="num" style="font-size:34px">${money(old)}</div></div></div></section>
-    ${groups.map((g) => g.length === 1 ? dealerBtn(g[0]) : `
-      <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
-          <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">${esc(g[0].name)}</span><span class="sm muted">${esc(g[0].city || "")} · ${g.length} счёта</span></div>
-          <div style="text-align:right"><div class="sm muted">всего</div><span class="num" style="font-size:24px">${money(g.reduce((a, d) => a + Number(d.summary.balance || 0), 0))}</span></div>
-        </div>
-        ${g.map((d) => `<button data-d="${d.id}" style="display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:#F6F7F9;border-radius:14px;padding:10px 12px;width:100%;text-align:left">
-          <span style="padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;${accStyle(d.account_label)}">${esc(d.account_label || "Основной")}</span>
-          <span class="sm muted" style="flex:1">${d.summary.days_without_payment != null ? "без оплаты " + d.summary.days_without_payment + " дн." : ""}${Number(d.summary.old_debt) > 0 ? ` · <b style="color:var(--bad)">старый ${money(d.summary.old_debt)}</b>` : ""}</span>
-          <span class="num" style="font-size:20px;white-space:nowrap">${money(d.summary.balance)}</span>${ic("chev", "#8992A3", 16)}</button>`).join("")}
-      </div>`).join("")}
-    <p class="sm muted" style="text-align:center">Нажмите на дилера: его кабинет, внесение оплаты и новая отгрузка.</p>
+      <div><div class="lbl">Общий долг</div><div class="num" style="font-size:34px">${money(gsum(real))}</div></div>
+      <div><div class="lbl">Старый &gt;30 дн.</div><div class="num" style="font-size:34px">${money(gsum(real, "old_debt"))}</div></div></div></section>
+    ${groups.map(row).join("")}
+    <p class="sm muted" style="text-align:center">Нажмите на дилера: его кабинет, внесение оплаты и новая отгрузка.${ds.some((d) => d.is_test) ? " Тестовые дилеры в общий долг не входят." : ""}</p>
   </main>`;
-  document.querySelectorAll("[data-d]").forEach((b) => b.onclick = async () => {
-    S.dealerId = b.dataset.d; $("#app").innerHTML = `<div class="center"><div class="spin"></div></div>`;
-    try { S.data = await api("dealer"); S.view = "home"; render() } catch (e) { $("#app").innerHTML = errBox("Не удалось открыть дилера.") }
+  document.querySelectorAll("[data-g]").forEach((b) => b.onclick = () => {
+    const g = groups.find((x) => (x[0].group_id || x[0].id) === b.dataset.g);
+    if (g.length === 1) return openDealer(g[0].id);
+    S.accGroup = g; go("s_acc");
   });
+}
+function renderAccPick() {
+  const g = S.accGroup || [];
+  if (!g.length) return toStaff("s_dealers");
+  const d0 = g[0];
+  $("#app").innerHTML = `
+  <div class="back"><button id="bk" aria-label="Назад к дилерам">${ic("back", "#111F32", 22)}</button><h1 class="h" style="font-size:32px">${esc(d0.name)}</h1></div>
+  <main class="wrap" style="padding-top:8px">
+    <section class="debt" style="padding:16px 20px;gap:4px"><span class="lbl">${esc(d0.city || "")} · общий долг по ${g.length} счетам</span><span class="num" style="font-size:40px;line-height:1">${money(gsum(g))}</span></section>
+    <p class="sm muted" style="margin:4px 4px 0">Выберите счёт:</p>
+    ${g.map((d) => `<button class="act" data-d="${d.id}" style="padding:16px">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+        <span class="pill" style="align-self:flex-start;font-size:14px;padding:6px 12px;${accStyle(d.account_label)}">${esc(d.account_label || "Основной")}</span>
+        <span class="sm muted">${d.summary.days_without_payment != null ? "без оплаты " + d.summary.days_without_payment + " дн." : "оплат ещё не было"}${Number(d.summary.old_debt) > 0 ? ` · <b style="color:var(--bad)">старый ${money(d.summary.old_debt)}</b>` : ""}</span></div>
+      <span class="num" style="font-size:26px;white-space:nowrap">${money(d.summary.balance)}</span>${ic("chev", "#8992A3", 16)}</button>`).join("")}
+  </main>`;
+  $("#bk").onclick = () => toStaff("s_dealers");
+  document.querySelectorAll("[data-d]").forEach((b) => b.onclick = () => openDealer(b.dataset.d));
 }
 
 const errBox = (t) => `<div class="center"><h1 class="h" style="font-size:30px">Ошибка</h1><p class="muted" style="margin:0">${esc(t)}</p><button class="btn btn-dark" onclick="location.reload()">Обновить</button></div>`;
