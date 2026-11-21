@@ -107,7 +107,7 @@ body.kb nav, body.kb .cart{display:none}
 <div id="app"><div class="center"><div class="spin" aria-label="Загрузка"></div></div></div>
 <nav id="nav" hidden></nav>
 <script>
-const API = "https://nrszupwnnzlnfxeqrbnb.supabase.co/functions/v1/miniapp-api";
+const API = "https://nrszupwnnzlnfxeqrbnb.supabase.co/functions/v1/miniapp-api?forceFunctionRegion=eu-central-1";
 const tg = window.Telegram && Telegram.WebApp;
 const S = { role:null, data:null, view:"home", period:"all", sel:null, catalog:null, cat:"Все", q:"", cart:{}, brand:"Все", adminDealers:null, dealerId:null, pay:{method:"Click"}, staff:null, counts:{}, ship:null, apay:{method:"Наличные"} };
 try { S.cart = JSON.parse(localStorage.getItem("omnis_cart") || "{}") } catch (e) {}
