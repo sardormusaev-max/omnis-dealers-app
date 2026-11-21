@@ -456,7 +456,7 @@ function drawList() {
     toks.every((t) => `${p.name} ${p.size} ${p.brand} ${p.id}`.toLowerCase().replace(/ё/g, "е").includes(t)));
   $("#plist").innerHTML = list.length ? list.slice(0, 120).map((p) => { const q = C[p.id] || 0; return `
     <div class="prod"><img class="thumb zoomable" src="img/${p.id}.jpg" alt="Фото: ${esc(p.name)}" loading="lazy" data-zoom="${p.id}" role="button" tabindex="0" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
-      <span class="br">${esc(p.brand)} · №${p.id}</span><span class="nm">${esc(p.name)}</span><span class="pr">${esc(p.size)} · ${money(p.price)} сум</span></div>
+      <span class="br">${esc(p.brand)} · №${p.id}</span><span class="nm">${esc(p.name)}</span><span class="pr">${esc(p.size)} · ${p.regular_price && Number(p.regular_price) > Number(p.price) ? `<s>${money(p.regular_price)}</s> <b style="color:#C8102E">${money(p.price)} сум</b> <span class="pill" style="background:#FDE7E6;color:#8C1D18;padding:2px 7px;font-size:11px">Акция</span>` : `${money(p.price)} сум`}</span></div>
       ${q ? `<div class="step"><button data-dec="${p.id}" aria-label="Меньше">−</button><input data-q="${p.id}" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" value="${q}" aria-label="Количество"><button data-inc="${p.id}" aria-label="Больше">+</button></div>`
           : `<button class="add" data-inc="${p.id}" aria-label="Добавить ${esc(p.name)}">${ic("plus", "#111F32")}</button>`}</div>` }).join("") + (list.length > 120 ? `<p class="sm muted" style="text-align:center">Показаны первые 120 — уточните поиск</p>` : "")
     : `<div class="card muted">Ничего не найдено</div>`;
