@@ -754,8 +754,25 @@ async function reload() { S.data = await api("dealer") }
 
 // ---------- клавиатура: прячем нижние панели, закрываем касанием вне поля ----------
 const isField = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA") && el.type !== "file";
-document.addEventListener("focusin", (e) => { if (isField(e.target)) document.body.classList.add("kb") });
-document.addEventListener("focusout", () => setTimeout(() => { if (!isField(document.activeElement)) document.body.classList.remove("kb") }, 60));
+// Клавиатура: нижние панели прячем, только пока клавиатура реально открыта (по высоте экрана),
+// а не просто пока поле в фокусе. Если клавиатуру закрыли кнопкой «назад»/«скрыть» — снимаем фокус,
+// количество сохраняется, корзина и меню возвращаются.
+let KB_MAX = 0, KB_OPEN = false;
+const vpH = () => Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight);
+function kbCheck() {
+  const h = vpH();
+  if (!isField(document.activeElement)) KB_MAX = Math.max(KB_MAX, h);
+  const open = isField(document.activeElement) && KB_MAX > 0 && h < KB_MAX - 120;
+  if (KB_OPEN && !open && isField(document.activeElement)) document.activeElement.blur();
+  KB_OPEN = open;
+  document.body.classList.toggle("kb", open);
+}
+KB_MAX = vpH();
+if (window.visualViewport) window.visualViewport.addEventListener("resize", kbCheck);
+window.addEventListener("resize", kbCheck);
+try { window.Telegram.WebApp.onEvent("viewportChanged", kbCheck) } catch (e) {}
+document.addEventListener("focusin", () => setTimeout(kbCheck, 350));
+document.addEventListener("focusout", () => setTimeout(kbCheck, 80));
 const tapOutside = (e) => {
   const a = document.activeElement;
   if (!isField(a)) return;
