@@ -308,6 +308,31 @@ function renderActs() {
   document.querySelectorAll(".act").forEach((b) => b.onclick = () => go("act", { sel: b.dataset.id }));
 }
 
+// ---- продажа акта в BILLZ (только владельцы): предпросмотр → «Провести продажу»
+function billzBlock(s) {
+  if (s.billz_order_no) return `<div style="font-weight:600">🧾 Чек BILLZ: #${esc(s.billz_order_no)}</div><div class="sm muted">${s.billz_sold_at ? timeTxt(s.billz_sold_at) + " · " : ""}${money(s.billz_total ?? s.total)} сум · отгрузка под реализацию</div>`;
+  return `<div style="font-weight:600;color:var(--bad)">🧾 Чек BILLZ: не проведён</div>${s.billz_error ? `<div class="sm" style="color:var(--bad)">${esc(s.billz_error)}</div>` : ""}<button class="btn btn-dark" style="height:46px" id="bzPrev">Провести в BILLZ</button>`;
+}
+function bindBillz(s) {
+  const b = $("#bzPrev"); if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = "Готовим чек…";
+    let p; try { p = await api("s_billz_preview", { shipmentId: s.id }) } catch (e) { b.disabled = false; b.textContent = "Провести в BILLZ"; return alertBox("Не удалось подготовить чек: " + ((e.data && e.data.message) || "ошибка BILLZ")) }
+    const box = $("#bzc");
+    box.innerHTML = `<div style="font-weight:600">Чек BILLZ · Omnis Warehouse · отгрузка под реализацию</div>
+      ${p.lines.map((l) => `<div class="item" style="padding:6px 0"><div><div class="n" style="font-size:13px">${esc(l.name)}</div><div class="d">${esc(l.size)} · ${l.qty} × ${money(l.price)}${l.price < l.retail ? ` <s>${money(l.retail)}</s>` : ""}</div></div><span class="num" style="font-size:16px">${money(l.amount)}</span></div>`).join("")}
+      <div style="display:flex;justify-content:space-between;border-top:2px solid var(--dark);padding-top:8px"><span style="font-weight:600">Итого в BILLZ</span><span class="num" style="font-size:22px">${money(p.total)} сум</span></div>
+      ${p.problems.length ? `<div class="sm" style="color:var(--bad);font-weight:600">Провести нельзя:<br>${p.problems.map(esc).join("<br>")}</div>` : `<button class="btn btn-navy" style="height:46px" id="bzSell">Провести продажу</button>`}`;
+    const sb = $("#bzSell"); if (!sb) return;
+    sb.onclick = async () => {
+      if (!(await confirmBox(`Провести в BILLZ продажу по акту №${s.act_no} на ${money(p.total)} сум? Товар спишется со склада Omnis Warehouse.`))) return;
+      sb.disabled = true; sb.textContent = "Проводим… до минуты";
+      try { const r = await api("s_billz_sell", { shipmentId: s.id }); try { tg.HapticFeedback.notificationOccurred("success") } catch (x) {} alertBox(`Проведено: чек BILLZ #${r.order_number} на ${money(r.total)} сум.`); renderAct() }
+      catch (e) { alertBox("Продажа не проведена: " + ((e.data && e.data.message) || "ошибка BILLZ")); renderAct() }
+    };
+  };
+}
+
 async function renderAct() {
   $("#app").innerHTML = `<div class="center"><div class="spin"></div></div>`;
   try {
@@ -326,8 +351,10 @@ async function renderAct() {
         ${items.map((i) => `<div class="item"><div style="display:flex;gap:10px;min-width:0">${i.product_id ? `<img class="thumb sm zoomable" src="img/${i.product_id}.jpg" alt="Фото: ${esc(i.name)}" loading="lazy" data-zoom="${i.product_id}" role="button" tabindex="0" onerror="this.style.visibility='hidden'">` : ""}<div><div class="n">${esc(i.name)}</div><div class="d">${esc(i.size)} · ${i.qty} шт × ${money(i.price)}</div></div></div><span class="num s">${money(i.amount)}</span></div>`).join("")}
         <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:12px;border-top:2px solid var(--dark)"><span style="font-weight:600">Итого</span><span class="num" style="font-size:26px">${money(s.total)} сум</span></div>
       </section>
+      ${S.staff === "owner" && s.kind === "act" && "billz_order_no" in s ? `<section class="card" id="bzc" style="display:flex;flex-direction:column;gap:10px">${billzBlock(s)}</section>` : ""}
       <div class="grid2"><button class="btn btn-light" id="pdf">${ic("box")}Акт в PDF</button>${readonly() ? "" : `<button class="btn btn-dark" id="rep">Повторить заказ</button>`}</div>
     </main>`;
+    bindBillz(s);
     $("#bk").onclick = () => go("acts");
     $("#pdf").onclick = async () => {
       const b = $("#pdf"); b.disabled = true; b.textContent = "Готовим PDF…";
